@@ -2,6 +2,11 @@ use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
 pub type TimestampFn = fn() -> u64;
 
+#[derive(Debug)]
+pub enum SnowFlakeGeneratorError {
+    SequenceOverflow,
+}
+
 pub struct SnowFlakeGenerator {
     machine_id: u32,
     timestamp_ms: AtomicU64,
@@ -15,8 +20,11 @@ impl SnowFlakeGenerator {
     const MACHINE_ID_MASK: u64 = 0x3FF;
     const SEQUENCE_MASK: u64 = 0xFFF;
 
-    const TIMESTAMP_SHIFT: usize = 22;
-    const MACHINE_ID_SHIFT: usize = 12;
+    const TIMESTAMP_BITS: usize = 22;
+    const MACHINE_ID_BITS: usize = 12;
+    const SEQUENCE_ID_BITS: usize = 10;
+
+    const SEQUENCE_ID_MAX: usize = 2 ^ Self::SEQUENCE_ID_BITS;
 
     pub fn new(machine_id: u32, epoch: u64, get_timestamp: TimestampFn) -> Self {
         let timestamp_ms = get_timestamp() - epoch;
@@ -30,7 +38,7 @@ impl SnowFlakeGenerator {
         }
     }
 
-    pub fn generate(&self) -> u64 {
+    pub fn generate(&self) -> Result<u64, SnowFlakeGeneratorError> {
         let new_timestamp = self.get_epoch_relative_timestamp();
         let prev_timestamp = self.timestamp_ms.load(Ordering::SeqCst);
 
@@ -44,13 +52,17 @@ impl SnowFlakeGenerator {
         };
 
         let sequence_id = self.sequence.fetch_add(1, Ordering::SeqCst);
+        if sequence_id as usize >= Self::SEQUENCE_ID_MAX {
+            return Err(SnowFlakeGeneratorError::SequenceOverflow);
+        }
+
         let timestamp_bits = timestamp & Self::TIMESTAMP_MASK;
         let machine_id_bits = self.machine_id as u64 & Self::MACHINE_ID_MASK;
         let sequence_id_bits = sequence_id as u64 & Self::SEQUENCE_MASK;
 
-        timestamp_bits << Self::TIMESTAMP_SHIFT
-            | machine_id_bits << Self::MACHINE_ID_SHIFT
-            | sequence_id_bits
+        Ok(timestamp_bits << Self::TIMESTAMP_BITS
+            | machine_id_bits << Self::MACHINE_ID_BITS
+            | sequence_id_bits)
     }
 
     fn get_epoch_relative_timestamp(&self) -> u64 {
@@ -70,10 +82,30 @@ mod test {
         let epoch = 0u64;
 
         let generator = SnowFlakeGenerator::new(machine_id, epoch, timestamp_fn);
-        let snowflake = generator.generate();
+        let snowflake = generator.generate().unwrap();
         assert_eq!(snowflake, 0x48D010000);
 
-        let snowflake = generator.generate();
+        let snowflake = generator.generate().unwrap();
         assert_eq!(snowflake, 0x48D010001);
+    }
+
+    #[test]
+    fn test_sequence_overflow() {
+        const TIMESTAMP: u64 = 0x1234u64;
+        let timestamp_fn = || TIMESTAMP;
+        let machine_id = 0x10u32;
+        let epoch = 0u64;
+
+        let generator = SnowFlakeGenerator::new(machine_id, epoch, timestamp_fn);
+        // iterate over generation until right before sequence overflow
+        for _ in 0..SnowFlakeGenerator::SEQUENCE_ID_MAX {
+            generator.generate().unwrap();
+        }
+
+        let res = generator.generate();
+        assert!(matches!(
+            res,
+            Err(SnowFlakeGeneratorError::SequenceOverflow)
+        ));
     }
 }
