@@ -1,4 +1,3 @@
-use chrono::Utc;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
 pub type TimestampFn = fn() -> u64;
