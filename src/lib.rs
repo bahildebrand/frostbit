@@ -1,4 +1,6 @@
-use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+mod timestamp_sequence;
+
+use timestamp_sequence::TimestampSequenceGenerator;
 
 pub type TimestampFn = fn() -> u64;
 
@@ -9,8 +11,7 @@ pub enum SnowFlakeGeneratorError {
 
 pub struct SnowFlakeGenerator {
     machine_id: u32,
-    timestamp_ms: AtomicU64,
-    sequence: AtomicU32,
+    ts_gen: TimestampSequenceGenerator,
     epoch: u64,
     get_timestamp: TimestampFn,
 }
@@ -28,11 +29,11 @@ impl SnowFlakeGenerator {
 
     pub fn new(machine_id: u32, epoch: u64, get_timestamp: TimestampFn) -> Self {
         let timestamp_ms = get_timestamp() - epoch;
+        let ts_gen = TimestampSequenceGenerator::new(timestamp_ms);
 
         Self {
             machine_id,
-            timestamp_ms: AtomicU64::new(timestamp_ms),
-            sequence: AtomicU32::new(0),
+            ts_gen,
             epoch,
             get_timestamp,
         }
@@ -40,35 +41,9 @@ impl SnowFlakeGenerator {
 
     pub fn generate(&self) -> Result<u64, SnowFlakeGeneratorError> {
         let new_timestamp = self.get_epoch_relative_timestamp();
-        let prev_timestamp = self.timestamp_ms.load(Ordering::SeqCst);
+        let timestamp_sequence = self.ts_gen.increment_sequence(new_timestamp)?;
 
-        if prev_timestamp != new_timestamp {
-            let swap_result = self.timestamp_ms.compare_exchange(
-                prev_timestamp,
-                new_timestamp,
-                Ordering::SeqCst,
-                Ordering::SeqCst,
-            );
-
-            if swap_result.is_ok() {
-                self.sequence.store(0, Ordering::SeqCst);
-            }
-        }
-
-        let sequence_id = self.sequence.fetch_add(1, Ordering::SeqCst);
-        if sequence_id as usize >= Self::SEQUENCE_ID_MAX {
-            return Err(SnowFlakeGeneratorError::SequenceOverflow);
-        }
-
-        let timestamp_bits = new_timestamp & Self::TIMESTAMP_MASK;
-        let machine_id_bits = self.machine_id as u64 & Self::MACHINE_ID_MASK;
-        let sequence_id_bits = sequence_id as u64 & Self::SEQUENCE_MASK;
-
-        Ok(
-            timestamp_bits << (Self::MACHINE_ID_BITS + Self::SEQUENCE_ID_BITS)
-                | machine_id_bits << Self::SEQUENCE_ID_BITS
-                | sequence_id_bits,
-        )
+        Ok(timestamp_sequence.into_snowflake(self.machine_id as u64))
     }
 
     fn get_epoch_relative_timestamp(&self) -> u64 {
