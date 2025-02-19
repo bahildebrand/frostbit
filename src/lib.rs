@@ -16,13 +16,13 @@ pub struct SnowFlakeGenerator {
 }
 
 impl SnowFlakeGenerator {
-    const TIMESTAMP_MASK: u64 = 0x1FFFFFFFFFF;
-    const MACHINE_ID_MASK: u64 = 0x3FF;
-    const SEQUENCE_MASK: u64 = 0xFFF;
+    const TIMESTAMP_BITS: usize = 42;
+    const MACHINE_ID_BITS: usize = 10;
+    const SEQUENCE_ID_BITS: usize = 12;
 
-    const TIMESTAMP_BITS: usize = 22;
-    const MACHINE_ID_BITS: usize = 12;
-    const SEQUENCE_ID_BITS: usize = 10;
+    const TIMESTAMP_MASK: u64 = (1 << Self::TIMESTAMP_BITS) - 1;
+    const MACHINE_ID_MASK: u64 = (1 << Self::MACHINE_ID_BITS) - 1;
+    const SEQUENCE_MASK: u64 = (1 << Self::SEQUENCE_ID_BITS) - 1;
 
     const SEQUENCE_ID_MAX: usize = 2 ^ Self::SEQUENCE_ID_BITS;
 
@@ -60,9 +60,11 @@ impl SnowFlakeGenerator {
         let machine_id_bits = self.machine_id as u64 & Self::MACHINE_ID_MASK;
         let sequence_id_bits = sequence_id as u64 & Self::SEQUENCE_MASK;
 
-        Ok(timestamp_bits << Self::TIMESTAMP_BITS
-            | machine_id_bits << Self::MACHINE_ID_BITS
-            | sequence_id_bits)
+        Ok(
+            timestamp_bits << (Self::MACHINE_ID_BITS + Self::SEQUENCE_ID_BITS)
+                | machine_id_bits << Self::SEQUENCE_ID_BITS
+                | sequence_id_bits,
+        )
     }
 
     fn get_epoch_relative_timestamp(&self) -> u64 {
