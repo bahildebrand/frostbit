@@ -42,21 +42,17 @@ impl SnowFlakeGenerator {
         let new_timestamp = self.get_epoch_relative_timestamp();
         let prev_timestamp = self.timestamp_ms.load(Ordering::SeqCst);
 
-        let timestamp = if prev_timestamp != new_timestamp {
+        if prev_timestamp != new_timestamp {
             self.timestamp_ms.store(new_timestamp, Ordering::SeqCst);
             self.sequence.store(0, Ordering::SeqCst);
-
-            new_timestamp
-        } else {
-            prev_timestamp
-        };
+        }
 
         let sequence_id = self.sequence.fetch_add(1, Ordering::SeqCst);
         if sequence_id as usize >= Self::SEQUENCE_ID_MAX {
             return Err(SnowFlakeGeneratorError::SequenceOverflow);
         }
 
-        let timestamp_bits = timestamp & Self::TIMESTAMP_MASK;
+        let timestamp_bits = new_timestamp & Self::TIMESTAMP_MASK;
         let machine_id_bits = self.machine_id as u64 & Self::MACHINE_ID_MASK;
         let sequence_id_bits = sequence_id as u64 & Self::SEQUENCE_MASK;
 
