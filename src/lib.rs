@@ -43,8 +43,16 @@ impl SnowFlakeGenerator {
         let prev_timestamp = self.timestamp_ms.load(Ordering::SeqCst);
 
         if prev_timestamp != new_timestamp {
-            self.timestamp_ms.store(new_timestamp, Ordering::SeqCst);
-            self.sequence.store(0, Ordering::SeqCst);
+            let swap_result = self.timestamp_ms.compare_exchange(
+                prev_timestamp,
+                new_timestamp,
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            );
+
+            if swap_result.is_ok() {
+                self.sequence.store(0, Ordering::SeqCst);
+            }
         }
 
         let sequence_id = self.sequence.fetch_add(1, Ordering::SeqCst);
