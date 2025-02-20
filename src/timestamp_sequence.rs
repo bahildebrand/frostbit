@@ -1,6 +1,10 @@
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::Ordering;
 
-use crate::{SnowFlakeGenerator, SnowFlakeGeneratorError};
+use crate::sync::AtomicU64;
+use crate::{
+    SnowFlakeGeneratorError, MACHINE_ID_BITS, MACHINE_ID_MASK, SEQUENCE_ID_BITS, SEQUENCE_ID_MAX,
+    SEQUENCE_MASK, TIMESTAMP_BITS, TIMESTAMP_MASK,
+};
 
 /// Stores both a 42-bit timestamp and 12-bit sequence in a single atomic.
 ///
@@ -18,8 +22,8 @@ pub(crate) struct TimestampSequenceGenerator {
 }
 
 impl TimestampSequenceGenerator {
-    const SEQUENCE_BITS: u64 = SnowFlakeGenerator::SEQUENCE_ID_BITS as u64 + 1;
-    const TIMESTAMP_BITS: u64 = SnowFlakeGenerator::TIMESTAMP_BITS as u64 + 1;
+    const SEQUENCE_BITS: u64 = SEQUENCE_ID_BITS as u64 + 1;
+    const TIMESTAMP_BITS: u64 = TIMESTAMP_BITS as u64 + 1;
 
     const TIMESTAMP_SHIFT: u64 = 20;
     const TIMESTAMP_MASK: u64 = ((1 << Self::TIMESTAMP_BITS) - 1) << Self::TIMESTAMP_SHIFT;
@@ -59,7 +63,7 @@ impl TimestampSequenceGenerator {
 
         let new_timestamp_sequence = self.inner.fetch_add(1, Ordering::SeqCst);
         let masked_sequence = new_timestamp_sequence & Self::SEQUENCE_MASK;
-        if masked_sequence >= SnowFlakeGenerator::SEQUENCE_ID_MAX as u64 {
+        if masked_sequence >= SEQUENCE_ID_MAX as u64 {
             Err(SnowFlakeGeneratorError::SequenceOverflow)
         } else {
             let sequence = new_timestamp_sequence & Self::SEQUENCE_MASK;
@@ -80,13 +84,12 @@ pub(crate) struct TimestampSequence {
 
 impl TimestampSequence {
     pub(crate) fn into_snowflake(self, machine_id: u64) -> u64 {
-        let timestamp_bits = self.timestamp & SnowFlakeGenerator::TIMESTAMP_MASK;
-        let machine_id_bits = machine_id & SnowFlakeGenerator::MACHINE_ID_MASK;
-        let sequence_id_bits = self.sequence & SnowFlakeGenerator::SEQUENCE_MASK;
+        let timestamp_bits = self.timestamp & TIMESTAMP_MASK;
+        let machine_id_bits = machine_id & MACHINE_ID_MASK;
+        let sequence_id_bits = self.sequence & SEQUENCE_MASK;
 
-        timestamp_bits
-            << (SnowFlakeGenerator::MACHINE_ID_BITS + SnowFlakeGenerator::SEQUENCE_ID_BITS)
-            | machine_id_bits << SnowFlakeGenerator::SEQUENCE_ID_BITS
+        timestamp_bits << (MACHINE_ID_BITS + SEQUENCE_ID_BITS)
+            | machine_id_bits << SEQUENCE_ID_BITS
             | sequence_id_bits
     }
 }
