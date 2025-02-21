@@ -6,6 +6,7 @@ use timestamp_sequence::TimestampSequenceGenerator;
 const TIMESTAMP_BITS: u64 = 41;
 const MACHINE_ID_BITS: usize = 10;
 const SEQUENCE_ID_BITS: usize = 12;
+const TIMESTAMP_SHIFT: usize = SEQUENCE_ID_BITS + MACHINE_ID_BITS;
 
 const TIMESTAMP_MASK: u64 = (1 << TIMESTAMP_BITS) - 1;
 const MACHINE_ID_MASK: u64 = (1 << MACHINE_ID_BITS) - 1;

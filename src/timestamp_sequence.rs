@@ -3,7 +3,7 @@ use std::sync::atomic::Ordering;
 use crate::sync::AtomicU64;
 use crate::{
     SnowFlakeGeneratorError, MACHINE_ID_BITS, MACHINE_ID_MASK, SEQUENCE_ID_BITS, SEQUENCE_ID_MAX,
-    SEQUENCE_MASK, TIMESTAMP_BITS, TIMESTAMP_MASK,
+    SEQUENCE_MASK, TIMESTAMP_MASK, TIMESTAMP_SHIFT,
 };
 
 /// Stores both a 42-bit timestamp and 12-bit sequence in a single atomic.
@@ -22,15 +22,13 @@ pub(crate) struct TimestampSequenceGenerator {
 }
 
 impl TimestampSequenceGenerator {
-    const SEQUENCE_BITS: u64 = SEQUENCE_ID_BITS as u64 + 1;
-    const TIMESTAMP_BITS: u64 = TIMESTAMP_BITS as u64 + 1;
+    const EXTENDED_SEQUENCE_BITS: u64 = SEQUENCE_ID_BITS as u64 + 1;
 
-    const TIMESTAMP_SHIFT: u64 = 20;
-    const TIMESTAMP_MASK: u64 = ((1 << Self::TIMESTAMP_BITS) - 1) << Self::TIMESTAMP_SHIFT;
-    const SEQUENCE_MASK: u64 = (1 << Self::SEQUENCE_BITS) - 1;
+    const SHIFTED_TIMESTAMP_MASK: u64 = TIMESTAMP_MASK << TIMESTAMP_SHIFT;
+    const EXTENDED_SEQUENCE_MASK: u64 = (1 << Self::EXTENDED_SEQUENCE_BITS) - 1;
 
     pub(crate) fn new(timestamp: u64) -> Self {
-        let shifted_timestamp = timestamp << Self::TIMESTAMP_SHIFT;
+        let shifted_timestamp = timestamp << TIMESTAMP_SHIFT;
 
         Self {
             inner: AtomicU64::new(shifted_timestamp),
@@ -42,10 +40,10 @@ impl TimestampSequenceGenerator {
         new_timestamp: u64,
     ) -> Result<TimestampSequence, SnowFlakeGeneratorError> {
         let mut prev_sequence = self.inner.load(Ordering::SeqCst);
-        let new_timestamp_shifted = new_timestamp << Self::TIMESTAMP_SHIFT;
+        let new_timestamp_shifted = new_timestamp << TIMESTAMP_SHIFT;
 
         loop {
-            let prev_timestamp_shifted = prev_sequence & Self::TIMESTAMP_MASK;
+            let prev_timestamp_shifted = prev_sequence & Self::SHIFTED_TIMESTAMP_MASK;
             if new_timestamp_shifted <= prev_timestamp_shifted {
                 break;
             }
@@ -62,13 +60,13 @@ impl TimestampSequenceGenerator {
         }
 
         let new_timestamp_sequence = self.inner.fetch_add(1, Ordering::SeqCst);
-        let masked_sequence = new_timestamp_sequence & Self::SEQUENCE_MASK;
+        let masked_sequence = new_timestamp_sequence & Self::EXTENDED_SEQUENCE_MASK;
         if masked_sequence >= SEQUENCE_ID_MAX as u64 {
             Err(SnowFlakeGeneratorError::SequenceOverflow)
         } else {
-            let sequence = new_timestamp_sequence & Self::SEQUENCE_MASK;
+            let sequence = new_timestamp_sequence & Self::EXTENDED_SEQUENCE_MASK;
             let timestamp =
-                (new_timestamp_sequence & Self::TIMESTAMP_MASK) >> Self::TIMESTAMP_SHIFT;
+                (new_timestamp_sequence & Self::SHIFTED_TIMESTAMP_MASK) >> TIMESTAMP_SHIFT;
             Ok(TimestampSequence {
                 sequence,
                 timestamp,
