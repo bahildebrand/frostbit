@@ -18,11 +18,18 @@ const TIMESTAMP_MAX: u64 = 2u64.pow(TIMESTAMP_BITS as u32) - 1;
 pub enum SnowFlakeGeneratorError {
     SequenceOverflow,
     TimestampOverflow,
+    TimestampError(&'static str),
+}
+
+impl From<&'static str> for SnowFlakeGeneratorError {
+    fn from(error: &'static str) -> Self {
+        Self::TimestampError(error)
+    }
 }
 
 pub struct SnowFlakeGenerator<T>
 where
-    T: Fn() -> u64,
+    T: Fn() -> Result<u64, &'static str>,
 {
     machine_id: u32,
     ts_gen: TimestampSequenceGenerator,
@@ -30,16 +37,20 @@ where
     get_timestamp: T,
 }
 
-impl<T: Fn() -> u64> SnowFlakeGenerator<T> {
-    pub fn new(machine_id: u32, epoch: u64, get_timestamp: T) -> Self {
-        let timestamp_ms = get_timestamp() - epoch;
+impl<T: Fn() -> Result<u64, &'static str>> SnowFlakeGenerator<T> {
+    pub fn new(
+        machine_id: u32,
+        epoch: u64,
+        get_timestamp: T,
+    ) -> Result<Self, SnowFlakeGeneratorError> {
+        let timestamp_ms = get_timestamp()? - epoch;
         let ts_gen = TimestampSequenceGenerator::new(timestamp_ms);
-        Self {
+        Ok(Self {
             machine_id,
             ts_gen,
             epoch,
             get_timestamp,
-        }
+        })
     }
 
     pub fn generate(&self) -> Result<u64, SnowFlakeGeneratorError> {
@@ -50,7 +61,7 @@ impl<T: Fn() -> u64> SnowFlakeGenerator<T> {
     }
 
     fn get_epoch_relative_timestamp(&self) -> Result<u64, SnowFlakeGeneratorError> {
-        let timestamp_ms = (self.get_timestamp)() - self.epoch;
+        let timestamp_ms = (self.get_timestamp)()? - self.epoch;
         if timestamp_ms < TIMESTAMP_MAX {
             Ok(timestamp_ms)
         } else {
@@ -66,11 +77,11 @@ mod test {
     #[test]
     fn test_timestamp_generation() {
         const TIMESTAMP: u64 = 0x1234u64;
-        let timestamp_fn = || TIMESTAMP;
+        let timestamp_fn = || Ok(TIMESTAMP);
         let machine_id = 0x10u32;
         let epoch = 0u64;
 
-        let generator = SnowFlakeGenerator::new(machine_id, epoch, timestamp_fn);
+        let generator = SnowFlakeGenerator::new(machine_id, epoch, timestamp_fn).unwrap();
         let snowflake = generator.generate().unwrap();
         assert_eq!(snowflake, 0x48D010000);
 
@@ -81,11 +92,11 @@ mod test {
     #[test]
     fn test_sequence_overflow() {
         const TIMESTAMP: u64 = 0x1234u64;
-        let timestamp_fn = || TIMESTAMP;
+        let timestamp_fn = || Ok(TIMESTAMP);
         let machine_id = 0x10u32;
         let epoch = 0u64;
 
-        let generator = SnowFlakeGenerator::new(machine_id, epoch, timestamp_fn);
+        let generator = SnowFlakeGenerator::new(machine_id, epoch, timestamp_fn).unwrap();
         // iterate over generation until right before sequence overflow
         for _ in 0..SEQUENCE_ID_MAX {
             generator.generate().unwrap();
@@ -101,15 +112,28 @@ mod test {
     #[test]
     fn test_timestamp_overflow() {
         const TIMESTAMP: u64 = TIMESTAMP_MAX + 1;
-        let timestamp_fn = || TIMESTAMP;
+        let timestamp_fn = || Ok(TIMESTAMP);
         let machine_id = 0x10u32;
         let epoch = 0u64;
 
-        let generator = SnowFlakeGenerator::new(machine_id, epoch, timestamp_fn);
+        let generator = SnowFlakeGenerator::new(machine_id, epoch, timestamp_fn).unwrap();
         let result = generator.generate();
         assert!(matches!(
             result,
             Err(SnowFlakeGeneratorError::TimestampOverflow)
+        ));
+    }
+
+    #[test]
+    fn test_timestamp_failure() {
+        let timestamp_fn = || Err("Timestamp error");
+        let machine_id = 0x10u32;
+        let epoch = 0u64;
+
+        let generator = SnowFlakeGenerator::new(machine_id, epoch, timestamp_fn);
+        assert!(matches!(
+            generator,
+            Err(SnowFlakeGeneratorError::TimestampError("Timestamp error"))
         ));
     }
 }
