@@ -43,7 +43,7 @@ impl<T: Fn() -> Result<u64, &'static str>> SnowFlakeGenerator<T> {
         epoch: u64,
         get_timestamp: T,
     ) -> Result<Self, SnowFlakeGeneratorError> {
-        let timestamp_ms = get_timestamp()? - epoch;
+        let timestamp_ms = Self::get_epoch_relative_timestamp(&get_timestamp, epoch)?;
         let ts_gen = TimestampSequenceGenerator::new(timestamp_ms);
         Ok(Self {
             machine_id,
@@ -54,14 +54,17 @@ impl<T: Fn() -> Result<u64, &'static str>> SnowFlakeGenerator<T> {
     }
 
     pub fn generate(&self) -> Result<u64, SnowFlakeGeneratorError> {
-        let new_timestamp = self.get_epoch_relative_timestamp()?;
+        let new_timestamp = Self::get_epoch_relative_timestamp(&self.get_timestamp, self.epoch)?;
         let timestamp_sequence = self.ts_gen.increment_sequence(new_timestamp)?;
 
         Ok(timestamp_sequence.into_snowflake(self.machine_id as u64))
     }
 
-    fn get_epoch_relative_timestamp(&self) -> Result<u64, SnowFlakeGeneratorError> {
-        let timestamp_ms = (self.get_timestamp)()? - self.epoch;
+    fn get_epoch_relative_timestamp(
+        get_timestamp: &T,
+        epoch: u64,
+    ) -> Result<u64, SnowFlakeGeneratorError> {
+        let timestamp_ms = get_timestamp()? - epoch;
         if timestamp_ms < TIMESTAMP_MAX {
             Ok(timestamp_ms)
         } else {
@@ -72,6 +75,11 @@ impl<T: Fn() -> Result<u64, &'static str>> SnowFlakeGenerator<T> {
 
 #[cfg(test)]
 mod test {
+    use std::sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    };
+
     use super::*;
 
     #[test]
@@ -112,7 +120,15 @@ mod test {
     #[test]
     fn test_timestamp_overflow() {
         const TIMESTAMP: u64 = TIMESTAMP_MAX + 1;
-        let timestamp_fn = || Ok(TIMESTAMP);
+        let call_count = Arc::new(AtomicU64::new(0));
+        let timestamp_fn = || {
+            let count = call_count.fetch_add(1, Ordering::SeqCst);
+            if count < 1 {
+                Ok(0)
+            } else {
+                Ok(TIMESTAMP)
+            }
+        };
         let machine_id = 0x10u32;
         let epoch = 0u64;
 
