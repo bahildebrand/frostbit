@@ -3,7 +3,7 @@ mod timestamp_sequence;
 
 use timestamp_sequence::TimestampSequenceGenerator;
 
-const TIMESTAMP_BITS: u64 = 42;
+const TIMESTAMP_BITS: u64 = 41;
 const MACHINE_ID_BITS: usize = 10;
 const SEQUENCE_ID_BITS: usize = 12;
 
@@ -51,7 +51,6 @@ impl<T: Fn() -> u64> SnowFlakeGenerator<T> {
 
     fn get_epoch_relative_timestamp(&self) -> Result<u64, SnowFlakeGeneratorError> {
         let timestamp_ms = (self.get_timestamp)() - self.epoch;
-        println!("{timestamp_ms} - max {}", TIMESTAMP_MAX);
         if timestamp_ms < TIMESTAMP_MAX {
             Ok(timestamp_ms)
         } else {
