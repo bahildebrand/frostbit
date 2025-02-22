@@ -89,10 +89,8 @@ impl SnowFlakeConfig {
         machine_id_bits: u64,
         sequence_bits: u64,
     ) -> Result<Self, SnowFlakeGeneratorError> {
-        let bit_sum = timestamp_bits + machine_id_bits + sequence_bits;
-        if bit_sum > 64 {
-            return Err(SnowFlakeGeneratorError::InvalidBitConfig);
-        }
+        Self::validate_config(machine_id_bits, sequence_bits, timestamp_bits)?;
+
         let timestamp_mask = build_mask(timestamp_bits);
         let machine_id_mask = build_mask(machine_id_bits);
         let sequence_mask = build_mask(sequence_bits);
@@ -113,6 +111,23 @@ impl SnowFlakeConfig {
 
     pub(crate) fn timestamp_shift(&self) -> u64 {
         self.machine_id_bits + self.sequence_bits
+    }
+
+    fn validate_config(
+        machine_id_bits: u64,
+        sequence_bits: u64,
+        timestamp_bits: u64,
+    ) -> Result<(), SnowFlakeGeneratorError> {
+        let bit_sum = timestamp_bits + machine_id_bits + sequence_bits;
+        if bit_sum > 64 {
+            return Err(SnowFlakeGeneratorError::InvalidBitConfig);
+        }
+
+        if machine_id_bits == 0 || sequence_bits == 0 || timestamp_bits == 0 {
+            Err(SnowFlakeGeneratorError::InvalidBitConfig)
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -140,6 +155,8 @@ mod test {
         atomic::{AtomicU64, Ordering},
         Arc,
     };
+
+    use rstest::rstest;
 
     use super::*;
 
@@ -212,6 +229,31 @@ mod test {
         assert!(matches!(
             generator,
             Err(SnowFlakeGeneratorError::TimestampError("Timestamp error"))
+        ));
+    }
+
+    #[test]
+    fn test_invalid_config_too_many_bits() {
+        let config = SnowFlakeConfig::new(41, 10, 24);
+        assert!(matches!(
+            config,
+            Err(SnowFlakeGeneratorError::InvalidBitConfig)
+        ));
+    }
+
+    #[rstest]
+    #[case(0, 10, 24)]
+    #[case(41, 0, 24)]
+    #[case(41, 10, 0)]
+    fn test_invalid_config_zero_machine_id(
+        #[case] timestamp_bits: u64,
+        #[case] machine_id_bits: u64,
+        #[case] sequence_bits: u64,
+    ) {
+        let config = SnowFlakeConfig::new(timestamp_bits, machine_id_bits, sequence_bits);
+        assert!(matches!(
+            config,
+            Err(SnowFlakeGeneratorError::InvalidBitConfig)
         ));
     }
 }

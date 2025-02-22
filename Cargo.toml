@@ -8,6 +8,7 @@ loom = "0.7"
 
 [dev-dependencies]
 loom = "0.7"
+rstest = "0.24.0"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)'] }
