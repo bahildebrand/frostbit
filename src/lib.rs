@@ -3,23 +3,16 @@ mod timestamp_sequence;
 
 use timestamp_sequence::TimestampSequenceGenerator;
 
-const TIMESTAMP_BITS: u64 = 41;
-const MACHINE_ID_BITS: usize = 10;
-const SEQUENCE_ID_BITS: usize = 12;
-const TIMESTAMP_SHIFT: usize = SEQUENCE_ID_BITS + MACHINE_ID_BITS;
-
-const TIMESTAMP_MASK: u64 = (1 << TIMESTAMP_BITS) - 1;
-const MACHINE_ID_MASK: u64 = (1 << MACHINE_ID_BITS) - 1;
-const SEQUENCE_MASK: u64 = (1 << SEQUENCE_ID_BITS) - 1;
-
-const SEQUENCE_ID_MAX: usize = 2usize.pow(SEQUENCE_ID_BITS as u32);
-const TIMESTAMP_MAX: u64 = 2u64.pow(TIMESTAMP_BITS as u32) - 1;
+const DEFAULT_TIMESTAMP_BITS: u64 = 41;
+const DEFAULT_MACHINE_ID_BITS: u64 = 10;
+const DEFAULT_SEQUENCE_ID_BITS: u64 = 12;
 
 #[derive(Debug)]
 pub enum SnowFlakeGeneratorError {
     SequenceOverflow,
     TimestampOverflow,
     TimestampError(&'static str),
+    InvalidBitConfig,
 }
 
 impl From<&'static str> for SnowFlakeGeneratorError {
@@ -36,6 +29,7 @@ where
     ts_gen: TimestampSequenceGenerator,
     epoch: u64,
     get_timestamp: T,
+    config: SnowFlakeConfig,
 }
 
 impl<T: Fn() -> Result<u64, &'static str>> SnowFlakeGenerator<T> {
@@ -44,29 +38,33 @@ impl<T: Fn() -> Result<u64, &'static str>> SnowFlakeGenerator<T> {
         epoch: u64,
         get_timestamp: T,
     ) -> Result<Self, SnowFlakeGeneratorError> {
-        let timestamp_ms = Self::get_epoch_relative_timestamp(&get_timestamp, epoch)?;
-        let ts_gen = TimestampSequenceGenerator::new(timestamp_ms);
+        let config = SnowFlakeConfig::default();
+        let timestamp_ms = Self::get_epoch_relative_timestamp(&get_timestamp, epoch, &config)?;
+        let ts_gen = TimestampSequenceGenerator::new(timestamp_ms, config);
         Ok(Self {
             machine_id,
             ts_gen,
             epoch,
             get_timestamp,
+            config,
         })
     }
 
     pub fn generate(&self) -> Result<u64, SnowFlakeGeneratorError> {
-        let new_timestamp = Self::get_epoch_relative_timestamp(&self.get_timestamp, self.epoch)?;
+        let new_timestamp =
+            Self::get_epoch_relative_timestamp(&self.get_timestamp, self.epoch, &self.config)?;
         let timestamp_sequence = self.ts_gen.increment_sequence(new_timestamp)?;
 
-        Ok(timestamp_sequence.into_snowflake(self.machine_id as u64))
+        Ok(timestamp_sequence.into_snowflake(self.machine_id as u64, &self.config))
     }
 
     fn get_epoch_relative_timestamp(
         get_timestamp: &T,
         epoch: u64,
+        config: &SnowFlakeConfig,
     ) -> Result<u64, SnowFlakeGeneratorError> {
         let timestamp_ms = get_timestamp()? - epoch;
-        if timestamp_ms < TIMESTAMP_MAX {
+        if timestamp_ms < config.timestamp_max {
             Ok(timestamp_ms)
         } else {
             Err(SnowFlakeGeneratorError::TimestampOverflow)
@@ -74,6 +72,68 @@ impl<T: Fn() -> Result<u64, &'static str>> SnowFlakeGenerator<T> {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct SnowFlakeConfig {
+    machine_id_bits: u64,
+    sequence_bits: u64,
+    timestamp_mask: u64,
+    machine_id_mask: u64,
+    sequence_mask: u64,
+    timestamp_max: u64,
+    sequence_max: u64,
+}
+
+impl SnowFlakeConfig {
+    pub fn new(
+        timestamp_bits: u64,
+        machine_id_bits: u64,
+        sequence_bits: u64,
+    ) -> Result<Self, SnowFlakeGeneratorError> {
+        let bit_sum = timestamp_bits + machine_id_bits + sequence_bits;
+        if bit_sum > 64 {
+            return Err(SnowFlakeGeneratorError::InvalidBitConfig);
+        }
+        let timestamp_mask = build_mask(timestamp_bits);
+        let machine_id_mask = build_mask(machine_id_bits);
+        let sequence_mask = build_mask(sequence_bits);
+
+        let timestamp_max = calc_max(timestamp_bits);
+        let sequence_max = calc_max(sequence_bits);
+
+        Ok(Self {
+            machine_id_bits,
+            sequence_bits,
+            timestamp_mask,
+            machine_id_mask,
+            sequence_mask,
+            timestamp_max,
+            sequence_max,
+        })
+    }
+
+    pub(crate) fn timestamp_shift(&self) -> u64 {
+        self.machine_id_bits + self.sequence_bits
+    }
+}
+
+impl Default for SnowFlakeConfig {
+    fn default() -> Self {
+        Self::new(
+            DEFAULT_TIMESTAMP_BITS,
+            DEFAULT_MACHINE_ID_BITS,
+            DEFAULT_SEQUENCE_ID_BITS,
+        )
+        .expect("Default values incorrect")
+    }
+}
+
+pub(crate) fn build_mask(bits: u64) -> u64 {
+    (1 << bits) - 1
+}
+
+pub(crate) fn calc_max(bits: u64) -> u64 {
+    2u64.pow(bits as u32) - 1
+}
 #[cfg(test)]
 mod test {
     use std::sync::{
@@ -104,10 +164,11 @@ mod test {
         let timestamp_fn = || Ok(TIMESTAMP);
         let machine_id = 0x10u32;
         let epoch = 0u64;
+        let sequence_id_max = SnowFlakeConfig::default().sequence_max + 1;
 
         let generator = SnowFlakeGenerator::new(machine_id, epoch, timestamp_fn).unwrap();
         // iterate over generation until right before sequence overflow
-        for _ in 0..SEQUENCE_ID_MAX {
+        for _ in 0..sequence_id_max {
             generator.generate().unwrap();
         }
 
@@ -120,14 +181,14 @@ mod test {
 
     #[test]
     fn test_timestamp_overflow() {
-        const TIMESTAMP: u64 = TIMESTAMP_MAX + 1;
+        let timestamp: u64 = SnowFlakeConfig::default().timestamp_max + 1;
         let call_count = Arc::new(AtomicU64::new(0));
         let timestamp_fn = || {
             let count = call_count.fetch_add(1, Ordering::SeqCst);
             if count < 1 {
                 Ok(0)
             } else {
-                Ok(TIMESTAMP)
+                Ok(timestamp)
             }
         };
         let machine_id = 0x10u32;
