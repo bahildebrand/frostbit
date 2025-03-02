@@ -35,6 +35,19 @@ const DEFAULT_TIMESTAMP_BITS: u64 = 41;
 const DEFAULT_MACHINE_ID_BITS: u64 = 10;
 const DEFAULT_SEQUENCE_ID_BITS: u64 = 12;
 
+/// Errors that can occur when generating snowflakes.
+///
+/// The SnowFlakeGeneratorError enum defines the errors that can occur when
+/// generating snowflakes. These errors are generated in the following cases
+///
+/// - [SnowFlakeGeneratorError::SequenceOverflow] - When the sequence ID overflows
+/// in a given millisecond.
+/// - [SnowFlakeGeneratorError::TimestampOverflow] - When the timestamp overflows
+/// the number of bits allocated for it.
+/// - [SnowFlakeGeneratorError::TimestampError] - When the timestamp generation
+/// function returns an error.
+/// - [SnowFlakeGeneratorError::InvalidBitConfig] - When the configuration for
+/// the snowflake generator is invalid.
 #[derive(Debug)]
 pub enum SnowFlakeGeneratorError {
     SequenceOverflow,
@@ -207,6 +220,7 @@ pub(crate) fn build_mask(bits: u64) -> u64 {
 pub(crate) fn calc_max(bits: u64) -> u64 {
     2u64.pow(bits as u32) - 1
 }
+
 #[cfg(test)]
 mod test {
     use std::sync::{
