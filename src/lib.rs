@@ -15,14 +15,14 @@
 //! ## Example Usage:
 //!
 //! ```rust
-//! use frostbit::SnowFlakeGenerator;
+//! use frostbit::SnowflakeGenerator;
 //!
 //! let timestamp_fn = { move ||
 //!     // suggest using something like `chrono`
 //!     Ok(0)
 //! };
 //!
-//! let gen = SnowFlakeGenerator::new(0, 0, timestamp_fn).unwrap();
+//! let gen = SnowflakeGenerator::new(0, 0, timestamp_fn).unwrap();
 //! let snowflake = gen.generate().unwrap();
 //! ```
 
@@ -40,23 +40,23 @@ const DEFAULT_SEQUENCE_ID_BITS: u64 = 12;
 /// The SnowFlakeGeneratorError enum defines the errors that can occur when
 /// generating snowflakes. These errors are generated in the following cases
 ///
-/// - [SnowFlakeGeneratorError::SequenceOverflow] - When the sequence ID overflows
+/// - [SnowflakeGeneratorError::SequenceOverflow] - When the sequence ID overflows
 /// in a given millisecond.
-/// - [SnowFlakeGeneratorError::TimestampOverflow] - When the timestamp overflows
+/// - [SnowflakeGeneratorError::TimestampOverflow] - When the timestamp overflows
 /// the number of bits allocated for it.
-/// - [SnowFlakeGeneratorError::TimestampError] - When the timestamp generation
+/// - [SnowflakeGeneratorError::TimestampError] - When the timestamp generation
 /// function returns an error.
-/// - [SnowFlakeGeneratorError::InvalidBitConfig] - When the configuration for
+/// - [SnowflakeGeneratorError::InvalidBitConfig] - When the configuration for
 /// the snowflake generator is invalid.
 #[derive(Debug)]
-pub enum SnowFlakeGeneratorError {
+pub enum SnowflakeGeneratorError {
     SequenceOverflow,
     TimestampOverflow,
     TimestampError(&'static str),
     InvalidBitConfig,
 }
 
-impl From<&'static str> for SnowFlakeGeneratorError {
+impl From<&'static str> for SnowflakeGeneratorError {
     fn from(error: &'static str) -> Self {
         Self::TimestampError(error)
     }
@@ -67,7 +67,7 @@ impl From<&'static str> for SnowFlakeGeneratorError {
 /// The SnowFlakeGenerator is the main struct for creating snowflakes. It
 /// is responsible for generating unique IDs based on the current time and
 /// the machine ID.
-pub struct SnowFlakeGenerator<T>
+pub struct SnowflakeGenerator<T>
 where
     T: Fn() -> Result<u64, &'static str>,
 {
@@ -75,10 +75,10 @@ where
     ts_gen: TimestampSequenceGenerator,
     epoch: u64,
     get_timestamp: T,
-    config: SnowFlakeConfig,
+    config: SnowflakeConfig,
 }
 
-impl<T: Fn() -> Result<u64, &'static str>> SnowFlakeGenerator<T> {
+impl<T: Fn() -> Result<u64, &'static str>> SnowflakeGenerator<T> {
     /// Create a new SnowFlakeGenerator with default configuration.
     ///
     /// This funcion creates a new SnowFlakeGenerator that creates snowflakes
@@ -87,20 +87,20 @@ impl<T: Fn() -> Result<u64, &'static str>> SnowFlakeGenerator<T> {
         machine_id: u32,
         epoch: u64,
         get_timestamp: T,
-    ) -> Result<Self, SnowFlakeGeneratorError> {
-        let config = SnowFlakeConfig::default();
+    ) -> Result<Self, SnowflakeGeneratorError> {
+        let config = SnowflakeConfig::default();
         Self::new_with_config(machine_id, epoch, get_timestamp, config)
     }
 
-    /// Create a new SnowFlakeGenerator with a custom configuration.
+    /// Create a new SnowflakeGenerator with a custom configuration.
     ///
-    /// Similar to [SnowFlakeGenerator::new], but allows for a custom configuration to be used.
+    /// Similar to [SnowflakeGenerator::new], but allows for a custom configuration to be used.
     pub fn new_with_config(
         machine_id: u32,
         epoch: u64,
         get_timestamp: T,
-        config: SnowFlakeConfig,
-    ) -> Result<Self, SnowFlakeGeneratorError> {
+        config: SnowflakeConfig,
+    ) -> Result<Self, SnowflakeGeneratorError> {
         let timestamp_ms = Self::get_epoch_relative_timestamp(&get_timestamp, epoch, &config)?;
         let ts_gen = TimestampSequenceGenerator::new(timestamp_ms, config);
         Ok(Self {
@@ -116,7 +116,7 @@ impl<T: Fn() -> Result<u64, &'static str>> SnowFlakeGenerator<T> {
     ///
     /// This function generates a new snowflake ID. If the sequence overflows,
     /// it will return [SnowFlakeGeneratorError::SequenceOverflow].
-    pub fn generate(&self) -> Result<u64, SnowFlakeGeneratorError> {
+    pub fn generate(&self) -> Result<u64, SnowflakeGeneratorError> {
         let new_timestamp =
             Self::get_epoch_relative_timestamp(&self.get_timestamp, self.epoch, &self.config)?;
         let timestamp_sequence = self.ts_gen.increment_sequence(new_timestamp)?;
@@ -127,13 +127,13 @@ impl<T: Fn() -> Result<u64, &'static str>> SnowFlakeGenerator<T> {
     fn get_epoch_relative_timestamp(
         get_timestamp: &T,
         epoch: u64,
-        config: &SnowFlakeConfig,
-    ) -> Result<u64, SnowFlakeGeneratorError> {
+        config: &SnowflakeConfig,
+    ) -> Result<u64, SnowflakeGeneratorError> {
         let timestamp_ms = get_timestamp()? - epoch;
         if timestamp_ms < config.timestamp_max {
             Ok(timestamp_ms)
         } else {
-            Err(SnowFlakeGeneratorError::TimestampOverflow)
+            Err(SnowflakeGeneratorError::TimestampOverflow)
         }
     }
 }
@@ -143,7 +143,7 @@ impl<T: Fn() -> Result<u64, &'static str>> SnowFlakeGenerator<T> {
 /// The SnowFlakeConfig struct is used to define the configuration for a snowflake generator.
 /// It defines the number of bits used for the timestamp, machine ID, and sequence ID.
 #[derive(Debug, Clone, Copy)]
-pub struct SnowFlakeConfig {
+pub struct SnowflakeConfig {
     machine_id_bits: u64,
     sequence_bits: u64,
     timestamp_mask: u64,
@@ -153,13 +153,13 @@ pub struct SnowFlakeConfig {
     sequence_max: u64,
 }
 
-impl SnowFlakeConfig {
+impl SnowflakeConfig {
     /// Create a new [SnowFlakeConfig] with the given number of bits for each field.
     pub fn new(
         timestamp_bits: u64,
         machine_id_bits: u64,
         sequence_bits: u64,
-    ) -> Result<Self, SnowFlakeGeneratorError> {
+    ) -> Result<Self, SnowflakeGeneratorError> {
         Self::validate_config(machine_id_bits, sequence_bits, timestamp_bits)?;
 
         let timestamp_mask = build_mask(timestamp_bits);
@@ -188,21 +188,21 @@ impl SnowFlakeConfig {
         machine_id_bits: u64,
         sequence_bits: u64,
         timestamp_bits: u64,
-    ) -> Result<(), SnowFlakeGeneratorError> {
+    ) -> Result<(), SnowflakeGeneratorError> {
         let bit_sum = timestamp_bits + machine_id_bits + sequence_bits;
         if bit_sum > 64 {
-            return Err(SnowFlakeGeneratorError::InvalidBitConfig);
+            return Err(SnowflakeGeneratorError::InvalidBitConfig);
         }
 
         if machine_id_bits == 0 || sequence_bits == 0 || timestamp_bits == 0 {
-            Err(SnowFlakeGeneratorError::InvalidBitConfig)
+            Err(SnowflakeGeneratorError::InvalidBitConfig)
         } else {
             Ok(())
         }
     }
 }
 
-impl Default for SnowFlakeConfig {
+impl Default for SnowflakeConfig {
     fn default() -> Self {
         Self::new(
             DEFAULT_TIMESTAMP_BITS,
@@ -239,7 +239,7 @@ mod test {
         let machine_id = 0x10u32;
         let epoch = 0u64;
 
-        let generator = SnowFlakeGenerator::new(machine_id, epoch, timestamp_fn).unwrap();
+        let generator = SnowflakeGenerator::new(machine_id, epoch, timestamp_fn).unwrap();
         let snowflake = generator.generate().unwrap();
         assert_eq!(snowflake, 0x48D010000);
 
@@ -253,9 +253,9 @@ mod test {
         let timestamp_fn = || Ok(TIMESTAMP);
         let machine_id = 0x10u32;
         let epoch = 0u64;
-        let sequence_id_max = SnowFlakeConfig::default().sequence_max + 1;
+        let sequence_id_max = SnowflakeConfig::default().sequence_max + 1;
 
-        let generator = SnowFlakeGenerator::new(machine_id, epoch, timestamp_fn).unwrap();
+        let generator = SnowflakeGenerator::new(machine_id, epoch, timestamp_fn).unwrap();
         // iterate over generation until right before sequence overflow
         for _ in 0..sequence_id_max {
             generator.generate().unwrap();
@@ -264,13 +264,13 @@ mod test {
         let res = generator.generate();
         assert!(matches!(
             res,
-            Err(SnowFlakeGeneratorError::SequenceOverflow)
+            Err(SnowflakeGeneratorError::SequenceOverflow)
         ));
     }
 
     #[test]
     fn test_timestamp_overflow() {
-        let timestamp: u64 = SnowFlakeConfig::default().timestamp_max + 1;
+        let timestamp: u64 = SnowflakeConfig::default().timestamp_max + 1;
         let call_count = Arc::new(AtomicU64::new(0));
         let timestamp_fn = || {
             let count = call_count.fetch_add(1, Ordering::SeqCst);
@@ -283,11 +283,11 @@ mod test {
         let machine_id = 0x10u32;
         let epoch = 0u64;
 
-        let generator = SnowFlakeGenerator::new(machine_id, epoch, timestamp_fn).unwrap();
+        let generator = SnowflakeGenerator::new(machine_id, epoch, timestamp_fn).unwrap();
         let result = generator.generate();
         assert!(matches!(
             result,
-            Err(SnowFlakeGeneratorError::TimestampOverflow)
+            Err(SnowflakeGeneratorError::TimestampOverflow)
         ));
     }
 
@@ -297,19 +297,19 @@ mod test {
         let machine_id = 0x10u32;
         let epoch = 0u64;
 
-        let generator = SnowFlakeGenerator::new(machine_id, epoch, timestamp_fn);
+        let generator = SnowflakeGenerator::new(machine_id, epoch, timestamp_fn);
         assert!(matches!(
             generator,
-            Err(SnowFlakeGeneratorError::TimestampError("Timestamp error"))
+            Err(SnowflakeGeneratorError::TimestampError("Timestamp error"))
         ));
     }
 
     #[test]
     fn test_invalid_config_too_many_bits() {
-        let config = SnowFlakeConfig::new(41, 10, 24);
+        let config = SnowflakeConfig::new(41, 10, 24);
         assert!(matches!(
             config,
-            Err(SnowFlakeGeneratorError::InvalidBitConfig)
+            Err(SnowflakeGeneratorError::InvalidBitConfig)
         ));
     }
 
@@ -322,10 +322,10 @@ mod test {
         #[case] machine_id_bits: u64,
         #[case] sequence_bits: u64,
     ) {
-        let config = SnowFlakeConfig::new(timestamp_bits, machine_id_bits, sequence_bits);
+        let config = SnowflakeConfig::new(timestamp_bits, machine_id_bits, sequence_bits);
         assert!(matches!(
             config,
-            Err(SnowFlakeGeneratorError::InvalidBitConfig)
+            Err(SnowflakeGeneratorError::InvalidBitConfig)
         ));
     }
 }

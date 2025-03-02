@@ -1,6 +1,6 @@
 use std::sync::{atomic::AtomicU64, Arc};
 
-use frostbit::SnowFlakeGenerator;
+use frostbit::SnowflakeGenerator;
 use loom::model::Builder;
 use loom::thread;
 
@@ -19,7 +19,7 @@ fn increment() {
             Ok(timestamp)
         };
 
-        let generator = Arc::new(SnowFlakeGenerator::new(0, 0, call_fn).unwrap());
+        let generator = Arc::new(SnowflakeGenerator::new(0, 0, call_fn).unwrap());
         let mut handles = Vec::with_capacity(4);
         for _ in 0..4 {
             let generator = generator.clone();

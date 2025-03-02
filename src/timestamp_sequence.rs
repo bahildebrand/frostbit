@@ -1,7 +1,7 @@
 use std::sync::atomic::Ordering;
 
 use crate::sync::AtomicU64;
-use crate::{build_mask, SnowFlakeConfig, SnowFlakeGeneratorError};
+use crate::{build_mask, SnowflakeConfig, SnowflakeGeneratorError};
 
 /// Stores both a 42-bit timestamp and 12-bit sequence in a single atomic.
 ///
@@ -16,13 +16,13 @@ use crate::{build_mask, SnowFlakeConfig, SnowFlakeGeneratorError};
 /// us to easily handle and check for overflows.
 pub(crate) struct TimestampSequenceGenerator {
     inner: AtomicU64,
-    config: SnowFlakeConfig,
+    config: SnowflakeConfig,
     shifted_timestamp_mask: u64,
     extended_sequence_mask: u64,
 }
 
 impl TimestampSequenceGenerator {
-    pub(crate) fn new(timestamp: u64, config: SnowFlakeConfig) -> Self {
+    pub(crate) fn new(timestamp: u64, config: SnowflakeConfig) -> Self {
         let shifted_timestamp = timestamp << config.timestamp_shift();
         let extended_sequence_mask = build_mask(config.sequence_bits + 1);
         let shifted_timestamp_mask = config.timestamp_mask << config.timestamp_shift();
@@ -38,7 +38,7 @@ impl TimestampSequenceGenerator {
     pub(crate) fn increment_sequence(
         &self,
         new_timestamp: u64,
-    ) -> Result<TimestampSequence, SnowFlakeGeneratorError> {
+    ) -> Result<TimestampSequence, SnowflakeGeneratorError> {
         let mut prev_sequence = self.inner.load(Ordering::SeqCst);
         let new_timestamp_shifted = new_timestamp << self.config.timestamp_shift();
 
@@ -62,7 +62,7 @@ impl TimestampSequenceGenerator {
         let new_timestamp_sequence = self.inner.fetch_add(1, Ordering::SeqCst);
         let masked_sequence = new_timestamp_sequence & self.extended_sequence_mask;
         if masked_sequence > self.config.sequence_max {
-            Err(SnowFlakeGeneratorError::SequenceOverflow)
+            Err(SnowflakeGeneratorError::SequenceOverflow)
         } else {
             let sequence = new_timestamp_sequence & self.extended_sequence_mask;
             let timestamp = (new_timestamp_sequence & self.shifted_timestamp_mask)
@@ -81,7 +81,7 @@ pub(crate) struct TimestampSequence {
 }
 
 impl TimestampSequence {
-    pub(crate) fn into_snowflake(self, machine_id: u64, config: &SnowFlakeConfig) -> u64 {
+    pub(crate) fn into_snowflake(self, machine_id: u64, config: &SnowflakeConfig) -> u64 {
         let timestamp_bits = self.timestamp & config.timestamp_mask;
         let machine_id_bits = machine_id & config.machine_id_mask;
         let sequence_id_bits = self.sequence & config.sequence_mask;
@@ -99,7 +99,7 @@ mod test {
     #[test]
     fn test_sequence_increment() {
         let old_timestamp = 0x1234;
-        let config = SnowFlakeConfig::default();
+        let config = SnowflakeConfig::default();
         let timestamp_sequence_generator = TimestampSequenceGenerator::new(old_timestamp, config);
 
         let timestamp_sequence = timestamp_sequence_generator
@@ -118,7 +118,7 @@ mod test {
     #[test]
     fn test_new_timestamp() {
         let old_timestamp = 0x1234;
-        let config = SnowFlakeConfig::default();
+        let config = SnowflakeConfig::default();
         let timestamp_sequence_generator = TimestampSequenceGenerator::new(old_timestamp, config);
 
         let timestamp_sequence = timestamp_sequence_generator
@@ -138,7 +138,7 @@ mod test {
     #[test]
     fn test_into_snowflake() {
         let old_timestamp = 0x1234;
-        let config = SnowFlakeConfig::default();
+        let config = SnowflakeConfig::default();
         let timestamp_sequence_generator = TimestampSequenceGenerator::new(old_timestamp, config);
 
         let timestamp_sequence = timestamp_sequence_generator
