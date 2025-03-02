@@ -1,3 +1,31 @@
+//! A library for generating unique snowflake IDs.
+//!
+//! Frostbit is a library that empowers you to create unique IDs for
+//! distributed systems. By ensuring that IDs are unique to every machine
+//! at every ms, you can create unique IDs without worrying about
+//! synchronization across all of your boxes.
+//!
+//! By default, Frostbit generates IDs that follow the
+//! [Twitter](https://en.wikipedia.org/wiki/Snowflake_ID) specification.
+//! There are other variants of snowflakes, such as the one defined
+//! by [Discord](https://discord.com/developers/docs/reference#snowflakes).
+//! It is possible to recreate these, by defining them as such in
+//! the [SnowFlakeConfig].
+//!
+//! ## Example Usage:
+//!
+//! ```rust
+//! use frostbit::SnowFlakeGenerator;
+//!
+//! let timestamp_fn = { move ||
+//!     // suggest using something like `chrono`
+//!     Ok(0)
+//! };
+//!
+//! let gen = SnowFlakeGenerator::new(0, 0, timestamp_fn).unwrap();
+//! let snowflake = gen.generate().unwrap();
+//! ```
+
 mod sync;
 mod timestamp_sequence;
 
