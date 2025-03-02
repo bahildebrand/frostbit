@@ -41,13 +41,13 @@ const DEFAULT_SEQUENCE_ID_BITS: u64 = 12;
 /// generating snowflakes. These errors are generated in the following cases
 ///
 /// - [SnowflakeGeneratorError::SequenceOverflow] - When the sequence ID overflows
-/// in a given millisecond.
+///   in a given millisecond.
 /// - [SnowflakeGeneratorError::TimestampOverflow] - When the timestamp overflows
-/// the number of bits allocated for it.
+///   the number of bits allocated for it.
 /// - [SnowflakeGeneratorError::TimestampError] - When the timestamp generation
-/// function returns an error.
+///   function returns an error.
 /// - [SnowflakeGeneratorError::InvalidBitConfig] - When the configuration for
-/// the snowflake generator is invalid.
+///   the snowflake generator is invalid.
 #[derive(Debug)]
 pub enum SnowflakeGeneratorError {
     SequenceOverflow,
