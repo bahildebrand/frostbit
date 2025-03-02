@@ -49,6 +49,11 @@ impl From<&'static str> for SnowFlakeGeneratorError {
     }
 }
 
+/// A generator for creating unique snowflake IDs.
+///
+/// The SnowFlakeGenerator is the main struct for creating snowflakes. It
+/// is responsible for generating unique IDs based on the current time and
+/// the machine ID.
 pub struct SnowFlakeGenerator<T>
 where
     T: Fn() -> Result<u64, &'static str>,
@@ -61,12 +66,28 @@ where
 }
 
 impl<T: Fn() -> Result<u64, &'static str>> SnowFlakeGenerator<T> {
+    /// Create a new SnowFlakeGenerator with default configuration.
+    ///
+    /// This funcion creates a new SnowFlakeGenerator that creates snowflakes
+    /// that use the Twitter specification.
     pub fn new(
         machine_id: u32,
         epoch: u64,
         get_timestamp: T,
     ) -> Result<Self, SnowFlakeGeneratorError> {
         let config = SnowFlakeConfig::default();
+        Self::new_with_config(machine_id, epoch, get_timestamp, config)
+    }
+
+    /// Create a new SnowFlakeGenerator with a custom configuration.
+    ///
+    /// Similar to [SnowFlakeGenerator::new], but allows for a custom configuration to be used.
+    pub fn new_with_config(
+        machine_id: u32,
+        epoch: u64,
+        get_timestamp: T,
+        config: SnowFlakeConfig,
+    ) -> Result<Self, SnowFlakeGeneratorError> {
         let timestamp_ms = Self::get_epoch_relative_timestamp(&get_timestamp, epoch, &config)?;
         let ts_gen = TimestampSequenceGenerator::new(timestamp_ms, config);
         Ok(Self {
@@ -78,6 +99,10 @@ impl<T: Fn() -> Result<u64, &'static str>> SnowFlakeGenerator<T> {
         })
     }
 
+    /// Generate a new snowflake.
+    ///
+    /// This function generates a new snowflake ID. If the sequence overflows,
+    /// it will return [SnowFlakeGeneratorError::SequenceOverflow].
     pub fn generate(&self) -> Result<u64, SnowFlakeGeneratorError> {
         let new_timestamp =
             Self::get_epoch_relative_timestamp(&self.get_timestamp, self.epoch, &self.config)?;
@@ -100,6 +125,10 @@ impl<T: Fn() -> Result<u64, &'static str>> SnowFlakeGenerator<T> {
     }
 }
 
+/// Configuration for a snowflake generator.
+///
+/// The SnowFlakeConfig struct is used to define the configuration for a snowflake generator.
+/// It defines the number of bits used for the timestamp, machine ID, and sequence ID.
 #[derive(Debug, Clone, Copy)]
 pub struct SnowFlakeConfig {
     machine_id_bits: u64,
@@ -112,6 +141,7 @@ pub struct SnowFlakeConfig {
 }
 
 impl SnowFlakeConfig {
+    /// Create a new [SnowFlakeConfig] with the given number of bits for each field.
     pub fn new(
         timestamp_bits: u64,
         machine_id_bits: u64,
